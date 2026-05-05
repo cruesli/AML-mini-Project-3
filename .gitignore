@@ -1,0 +1,15 @@
+/.claude
+
+# Ignore all files in the runs directory
+/runs/*
+
+# Data
+/data/*
+
+Claude.md
+
+.env
+
+/__pycache__
+
+
