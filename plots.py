@@ -34,7 +34,7 @@ def plot_loss_curve(history, path='runs/loss_curve.png'):
     plt.close(fig)
 
 
-def plot_loss_csv(csv_path='runs/training_log.csv', path='runs/loss_curve_csv.png', skip_epochs=2):
+def plot_loss_csv(csv_path='runs/training_log.csv', path='runs/loss_curve_csv.png', skip_epochs=50):
     import csv
     rows = []
     with open(csv_path) as f:

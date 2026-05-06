@@ -22,9 +22,13 @@ def _degree_sort_order(data):
     if data.edge_index.numel() > 0:
         idx = data.edge_index[1].numpy()
         np.add.at(deg, idx, 1)
-    secondary = data.x.argmax(dim=-1).numpy()
-    # np.lexsort: last key is primary; ascending -deg = descending degree
-    return torch.from_numpy(np.lexsort((secondary, -deg))).long()
+    neighbor_deg_sum = np.zeros(n, dtype=np.int64)
+    if data.edge_index.numel() > 0:
+        src = data.edge_index[0].numpy()
+        tgt = data.edge_index[1].numpy()
+        np.add.at(neighbor_deg_sum, tgt, deg[src])
+    # np.lexsort: last key is primary; negate both for descending order
+    return torch.from_numpy(np.lexsort((-neighbor_deg_sum, -deg))).long()
 
 
 def attach_targets(dataset, n_max=N_MAX):

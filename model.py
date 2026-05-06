@@ -71,17 +71,19 @@ class GaussianEncoder(nn.Module):
 class BernoulliEdgeDecoder(nn.Module):
     def __init__(self, latent_dim, n_max=N_MAX):
         super().__init__()
+        self.n_max = n_max
         k = n_max * (n_max - 1) // 2
         self.decoder_net = nn.Sequential(
-            nn.Linear(latent_dim, 256),
+            nn.Linear(latent_dim + n_max + 1, 256),
             nn.ReLU(),
             nn.Linear(256, 512),
             nn.ReLU(),
             nn.Linear(512, k),
         )
 
-    def forward(self, z):
-        return td.Bernoulli(logits=self.decoder_net(z))
+    def forward(self, z, n_onehot):
+        inp = torch.cat([z, n_onehot], dim=-1)
+        return td.Bernoulli(logits=self.decoder_net(inp))
 
 
 # VAE composition
@@ -95,7 +97,9 @@ class GraphVAE(nn.Module):
     def elbo(self, data, target, mask):
         q = self.encoder(data)
         z = q.rsample()
-        p = self.decoder(z)
+        ns = torch.bincount(data.batch, minlength=z.shape[0])
+        n_onehot = torch.nn.functional.one_hot(ns, num_classes=N_MAX + 1).float()
+        p = self.decoder(z, n_onehot)
         k = N_MAX * (N_MAX - 1) // 2
         b = z.shape[0]
         target = target.view(b, k)
@@ -110,17 +114,17 @@ class GraphVAE(nn.Module):
 
     def sample(self, num_graphs, n_dist, device='cpu'):
         rows, cols = torch.triu_indices(N_MAX, N_MAX, offset=1)
-        with torch.no_grad():
-            z = self.prior().sample((num_graphs,)).to(device)
-            logits = self.decoder(z).logits
-            edges = torch.bernoulli(torch.sigmoid(logits)).cpu()
-
         ns = torch.multinomial(
             torch.tensor(n_dist, dtype=torch.float), num_graphs, replacement=True
-        ).tolist()
+        )
+        with torch.no_grad():
+            z = self.prior().sample((num_graphs,)).to(device)
+            n_onehot = torch.nn.functional.one_hot(ns, num_classes=N_MAX + 1).float().to(device)
+            logits = self.decoder(z, n_onehot).logits
+            edges = torch.bernoulli(torch.sigmoid(logits)).cpu()
 
         graphs = []
-        for i, n in enumerate(ns):
+        for i, n in enumerate(ns.tolist()):
             A = torch.zeros(N_MAX, N_MAX)
             A[rows, cols] = edges[i]
             A = A + A.t()
